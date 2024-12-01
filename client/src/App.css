@@ -1,61 +1,54 @@
-/* Full screen for the editor container */
-.editor-container {
-  width: 100vw;
+.App {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   height: 100vh;
-  background-color: #1e1e1e; /* Make the editor take the full height of the screen */
+  background-color: #1e1e1e;
 }
 
-/* Position video and buttons as an overlay at the bottom */
+.editor-container {
+  width: 100%;
+  height: 60vh; /* Set the height for the editor */
+}
+
 .overlay {
   position: fixed;
   bottom: 0;
   left: 0;
   width: 100%;
-  background-color: rgba(0, 0, 0, 0); /* Transparent background */
+  background-color: rgba(0, 0, 0, 0.6);
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   padding: 10px;
-  z-index: 10; /* Ensure the overlay is above the code editor */
+  z-index: 10; /* Ensure the overlay is above the editor */
 }
 
-/* Video container for local and remote streams */
 .video-container {
   width: 100%;
   display: flex;
-  justify-content: space-between; /* Facecam on left, screen share on right */
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
-  padding: 0 20px; /* Optional: add padding for the entire container */
 }
 
-/* Local video stays circular and is positioned on the left */
 .video-local {
-  width: 250px; 
-  height: 250px; 
+  width: 150px;
+  height: 150px;
   margin: 5px;
-  border-radius: 50%; 
-  object-fit: cover; 
-  border: none;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
-/* Flexbox container for facecam videos */
-.facecam-container {
-  display: flex;
-  gap: 20px; /* Space between each facecam video */
-}
-
-/* Screen share preview is in a rectangular box and positioned on the right */
 .video-remote {
-  width: 640px; /* Set the width of the rectangular box */
-  height: 360px; /* Set the height of the rectangular box to maintain 16:9 aspect ratio */
-  border-radius: 0; /* Remove border radius for rectangular shape */
-  object-fit: cover; /* Ensure the screen share fits the box */
-  border: none; /* Optional: add a visible border */
+  width: 640px;
+  height: 360px;
+  border-radius: 0;
+  object-fit: cover;
 }
 
-/* Control buttons */
 .controls {
   display: flex;
   gap: 10px;
@@ -66,14 +59,4 @@
   padding: 10px 20px;
   font-size: 16px;
   cursor: pointer;
-}
-
-/* Optional styling for the CodeMirror editor to ensure it takes up the entire screen */
-.CodeMirror {
-  height: 100%;
-  width: 100%;
-}
-
-.CodeMirror-lines {
-  color: white;
 }

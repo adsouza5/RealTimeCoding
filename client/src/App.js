@@ -1,101 +1,133 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { createEditor } from 'slate';
-import { Slate, Editable, withReact } from 'slate-react';
-import { withHistory } from 'slate-history';
+import React, { useState, useEffect, useRef } from 'react';
+import { Editor } from '@monaco-editor/react';
 import io from 'socket.io-client';
 import { db } from './firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import withCollaboration from './withCollaboration'; // Import the custom hook
-import './App.css';  // Import custom styles
+import './App.css';
 
 const socket = io('http://localhost:5000');
 
 const App = () => {
-  const [editor] = useState(() => withCollaboration(withHistory(withReact(createEditor()))));
-  const [documentId] = useState('default'); // Default document ID
+  const [code, setCode] = useState('// Start coding...');
+  const [documentId] = useState('default');
   const [loading, setLoading] = useState(true);
-  
-  // Default initial value for the Slate editor
-  const initialValue = useMemo(() => [
-    {
-      type: 'paragraph',
-      children: [{ text: 'Start writing your collaborative document here...' }],
-    },
-  ], []);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isMicOn, setIsMicOn] = useState(false);
 
-  const [editorValue, setEditorValue] = useState(initialValue); // Initialize with initialValue
+  const localVideoRef = useRef(null);
+  const screenVideoRef = useRef(null);
+  let localStream = useRef(null);
+  let screenStream = useRef(null);
 
-  // Load the initial document from Firestore on mount
+  // Load initial code from Firestore
   useEffect(() => {
     const fetchDocument = async () => {
       try {
         const docRef = doc(db, 'sessions', documentId);
         const docSnap = await getDoc(docRef);
-  
+
         if (docSnap.exists()) {
-          const fetchedContent = docSnap.data().content;
-          if (fetchedContent) {
-            const parsedContent = JSON.parse(fetchedContent);
-            if (Array.isArray(parsedContent)) {
-              setEditorValue(parsedContent); // Ensure valid content
-            } else {
-              console.warn('Invalid content fetched, using initialValue.');
-              setEditorValue(initialValue); // Fallback to initialValue
-            }
-          } else {
-            console.log("No content available, initializing with default.");
-            setEditorValue(initialValue);
-          }
+          const fetchedCode = docSnap.data().content;
+          setCode(fetchedCode || '// Start coding...');
         } else {
-          console.warn('No document found, initializing with default content.');
-          setEditorValue(initialValue);
+          setCode('// Start coding...');
         }
       } catch (error) {
         console.error('Error fetching document:', error);
-        setEditorValue(initialValue); // Fallback on error
+        setCode('// Error loading code');
       }
-  
-      setLoading(false); // Ensure loading state is updated after fetching
+      setLoading(false);
     };
-  
+
     fetchDocument();
-  
-    // Listen for updates from other collaborators via socket
-    socket.on('documentUpdate', (newContent) => {
-      try {
-        const parsedContent = JSON.parse(newContent);
-        if (Array.isArray(parsedContent)) {
-          setEditorValue(parsedContent);
-        } else {
-          console.warn('Invalid socket update, ignoring.');
-        }
-      } catch (e) {
-        console.error('Failed to parse documentUpdate:', e);
-      }
+
+    // Listen for code updates from other collaborators via socket
+    socket.on('codeUpdate', (newCode) => {
+      setCode(newCode);
     });
-  
+
     return () => {
-      socket.off('documentUpdate');
+      socket.off('codeUpdate');
     };
-  }, [documentId, initialValue]);
+  }, [documentId]);
 
-  // Handle change in editor content
-  const handleChange = (value) => {
-    setEditorValue(value); // Update the local editor value
-    const content = JSON.stringify(value);
-    socket.emit('documentChange', content); // Send updated content via socket
+  // Handle changes in the editor
+  const handleEditorChange = (newValue) => {
+    setCode(newValue);
+    socket.emit('codeChange', newValue);
 
-    // Save the document to Firebase Firestore
+    // Save code to Firestore
     const docRef = doc(db, 'sessions', documentId);
-    setDoc(docRef, { content })
+    setDoc(docRef, { content: newValue })
       .then(() => console.log('Document saved successfully!'))
       .catch((error) => console.error('Error saving document:', error));
   };
 
-  // Custom rendering for formatting (e.g., bold, italic, etc.)
-  const renderLeaf = useCallback((props) => {
-    return <Leaf {...props} />;
-  }, []);
+  // Toggle camera on/off
+  const toggleCamera = async () => {
+    if (!isCameraOn) {
+      try {
+        localStream.current = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+        localVideoRef.current.srcObject = localStream.current;
+        setIsCameraOn(true);
+      } catch (err) {
+        console.error('Error accessing the camera:', err);
+      }
+    } else {
+      localStream.current.getTracks().forEach(track => track.stop());
+      localVideoRef.current.srcObject = null;
+      setIsCameraOn(false);
+    }
+  };
+
+  // Toggle microphone on/off
+  const toggleMicrophone = async () => {
+    if (!isMicOn) {
+      try {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          video: false,
+          audio: true,
+        });
+        // If microphone access is successful, integrate it with your existing stream
+        localStream.current = audioStream;
+        setIsMicOn(true);
+      } catch (err) {
+        console.error('Error accessing the microphone:', err);
+      }
+    } else {
+      localStream.current.getTracks().forEach(track => track.stop());
+      setIsMicOn(false);
+    }
+  };
+
+  // Toggle screen sharing on/off
+  const toggleScreenShare = async () => {
+    if (!isScreenSharing) {
+      try {
+        screenStream.current = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+        });
+        screenVideoRef.current.srcObject = screenStream.current;
+
+        screenStream.current.getTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+          screenVideoRef.current.srcObject = null;
+        };
+
+        setIsScreenSharing(true);
+      } catch (err) {
+        console.error('Error sharing the screen:', err);
+      }
+    } else {
+      screenStream.current.getTracks().forEach(track => track.stop());
+      screenVideoRef.current.srcObject = null;
+      setIsScreenSharing(false);
+    }
+  };
 
   if (loading) {
     return <div>Loading...</div>;
@@ -103,37 +135,50 @@ const App = () => {
 
   return (
     <div className="App">
-      <Slate 
-        editor={editor} 
-        value={editorValue.length > 0 ? editorValue : initialValue} // Ensure it's never undefined
-        onChange={handleChange}
-      >
-        <Editable
-          renderLeaf={renderLeaf}
-          placeholder="Collaborative Document Editor"
-          spellCheck
-          autoFocus
+      {/* Monaco Editor */}
+      <div className="editor-container">
+        <Editor
+          height="60vh"
+          defaultLanguage="javascript"
+          theme="vs-dark"
+          value={code}
+          onChange={handleEditorChange}
+          options={{ automaticLayout: true }}
         />
-      </Slate>
+      </div>
+
+      {/* Video and Screen Sharing Controls */}
+      <div className="overlay">
+        <div className="video-container">
+          <div className="facecam-container">
+            <video
+              className="video-local"
+              ref={localVideoRef}
+              autoPlay
+              muted
+            ></video> {/* Placeholder for local video */}
+          </div>
+          <video
+            className="video-remote"
+            ref={screenVideoRef}
+            autoPlay
+          ></video> {/* Placeholder for screen share */}
+        </div>
+
+        <div className="controls">
+          <button onClick={toggleScreenShare}>
+            {isScreenSharing ? 'Stop Screen Share' : 'Start Screen Share'}
+          </button>
+          <button onClick={toggleCamera}>
+            {isCameraOn ? 'Turn Camera Off' : 'Turn Camera On'}
+          </button>
+          <button onClick={toggleMicrophone}>
+            {isMicOn ? 'Turn Microphone Off' : 'Turn Microphone On'}
+          </button>
+        </div>
+      </div>
     </div>
   );
-};
-
-// Define custom render leaf for styling like bold, italic, etc.
-const Leaf = ({ attributes, children, leaf }) => {
-  if (leaf.bold) {
-    children = <strong>{children}</strong>;
-  }
-
-  if (leaf.italic) {
-    children = <em>{children}</em>;
-  }
-
-  if (leaf.underline) {
-    children = <u>{children}</u>;
-  }
-
-  return <span {...attributes}>{children}</span>;
 };
 
 export default App;

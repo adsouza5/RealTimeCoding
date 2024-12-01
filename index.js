@@ -13,7 +13,6 @@ const io = socketIo(server, {
 });
 
 app.use(cors());
-app.get('/', (req, res) => res.send('Real-Time Collaboration Platform'));
 
 io.on('connection', (socket) => {
     console.log('New client connected');
@@ -22,15 +21,10 @@ io.on('connection', (socket) => {
         socket.broadcast.emit('codeUpdate', code);
     });
 
-    socket.on('signal', (data) => {
-        // Forward the signaling data to the other peer
-        socket.broadcast.emit('signal', data);
-    });
-    
     socket.on('disconnect', () => {
-        console.log('Client disconnect');
+        console.log('Client disconnected');
     });
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log('Server running on Port ${PORT}'));
+server.listen(PORT, () => console.log(`Server running on Port ${PORT}`));
